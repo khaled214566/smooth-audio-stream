@@ -5,17 +5,22 @@ import albumArt4 from "@/assets/album-art-4.jpg";
 import albumArt5 from "@/assets/album-art-5.jpg";
 import albumArt6 from "@/assets/album-art-6.jpg";
 
+/** Build a URL for files under `public/audio/` (handles Unicode / special characters). */
+const audioPublicPath = (filename: string) => "/audio/" + encodeURIComponent(filename);
+
 export interface Song {
   id: string;
   title: string;
   artist: string;
   album: string;
-  duration: number; // seconds
+  duration: number; // seconds (placeholder until metadata loads for tracks with audioSrc)
   artwork: string;
   isFavorite: boolean;
   dateAdded: string;
   playCount: number;
   folder: string;
+  /** Public URL for playback (e.g. `/audio/track.mp3`) when the player uses real audio. */
+  audioSrc?: string;
 }
 
 export interface Playlist {
@@ -26,25 +31,123 @@ export interface Playlist {
   createdAt: string;
 }
 
+/** Filenames on disk in `public/audio/` (must match exactly). */
+const AUDIO = {
+  warrior:
+    "Warrior of the Mind - EPIC： The Musical Animatic (FLASH WARNING) [_N15ek-uTl0].mp3",
+  polyphemus: "Polyphemus - EPIC： The Musical Animatic [kKgwQy30R-c].mp3",
+  survive:
+    "Survive - EPIC： The Musical Animatic (CW： GORE AND FLASH) [6GpuV9iyQYU].mp3",
+  openArms: "OPEN ARMS ⧸⧸ Epic： the musical animatic [bKMgFJq88Is].mp3",
+  horse:
+    "The Horse and The Infant + Just a Man ｜ EPIC： The Musical Animatics [QXeYVV1zcUc].mp3",
+  fullSpeed:
+    "Full Speed Ahead ｜ EPIC： The Musical ｜ Updated Audio [5NDW9cHZQAg].mp3",
+} as const;
+
 export const demoSongs: Song[] = [
-  { id: "1", title: "Golden Hour", artist: "Aurora Waves", album: "Amber Glow", duration: 234, artwork: albumArt1, isFavorite: true, dateAdded: "2025-03-15", playCount: 47, folder: "Electronic" },
-  { id: "2", title: "Cosmic Drift", artist: "Nebula Sound", album: "Deep Space", duration: 312, artwork: albumArt2, isFavorite: false, dateAdded: "2025-03-10", playCount: 23, folder: "Ambient" },
-  { id: "3", title: "Neon Pulse", artist: "Synthwave Collective", album: "Electric Dreams", duration: 198, artwork: albumArt3, isFavorite: true, dateAdded: "2025-02-28", playCount: 89, folder: "Synthwave" },
-  { id: "4", title: "Forest Echo", artist: "Nature Sounds", album: "Earth Tones", duration: 267, artwork: albumArt4, isFavorite: false, dateAdded: "2025-03-01", playCount: 12, folder: "Ambient" },
-  { id: "5", title: "Sunset Ride", artist: "Desert Beats", album: "Warm Horizons", duration: 245, artwork: albumArt5, isFavorite: true, dateAdded: "2025-03-18", playCount: 56, folder: "Chill" },
-  { id: "6", title: "Midnight Rain", artist: "Shadow Keys", album: "Monochrome", duration: 289, artwork: albumArt6, isFavorite: false, dateAdded: "2025-02-20", playCount: 34, folder: "Piano" },
-  { id: "7", title: "Solar Flare", artist: "Aurora Waves", album: "Amber Glow", duration: 203, artwork: albumArt1, isFavorite: false, dateAdded: "2025-03-15", playCount: 19, folder: "Electronic" },
-  { id: "8", title: "Starfall", artist: "Nebula Sound", album: "Deep Space", duration: 278, artwork: albumArt2, isFavorite: true, dateAdded: "2025-03-10", playCount: 41, folder: "Ambient" },
-  { id: "9", title: "Cyber City", artist: "Synthwave Collective", album: "Electric Dreams", duration: 221, artwork: albumArt3, isFavorite: false, dateAdded: "2025-02-28", playCount: 67, folder: "Synthwave" },
-  { id: "10", title: "Mountain Stream", artist: "Nature Sounds", album: "Earth Tones", duration: 334, artwork: albumArt4, isFavorite: false, dateAdded: "2025-03-01", playCount: 8, folder: "Ambient" },
-  { id: "11", title: "Dusk Patrol", artist: "Desert Beats", album: "Warm Horizons", duration: 256, artwork: albumArt5, isFavorite: false, dateAdded: "2025-03-18", playCount: 29, folder: "Chill" },
-  { id: "12", title: "Silent Film", artist: "Shadow Keys", album: "Monochrome", duration: 301, artwork: albumArt6, isFavorite: true, dateAdded: "2025-02-20", playCount: 15, folder: "Piano" },
+  {
+    id: "1",
+    title: "Warrior of the Mind",
+    artist: "EPIC: The Musical",
+    album: "EPIC: The Musical Animatics",
+    duration: 240,
+    artwork: albumArt1,
+    isFavorite: true,
+    dateAdded: "2026-03-21",
+    playCount: 0,
+    folder: "EPIC",
+    audioSrc: audioPublicPath(AUDIO.warrior),
+  },
+  {
+    id: "2",
+    title: "Polyphemus",
+    artist: "EPIC: The Musical",
+    album: "EPIC: The Musical Animatics",
+    duration: 240,
+    artwork: albumArt2,
+    isFavorite: false,
+    dateAdded: "2026-03-21",
+    playCount: 0,
+    folder: "EPIC",
+    audioSrc: audioPublicPath(AUDIO.polyphemus),
+  },
+  {
+    id: "3",
+    title: "Survive",
+    artist: "EPIC: The Musical",
+    album: "EPIC: The Musical Animatics",
+    duration: 240,
+    artwork: albumArt3,
+    isFavorite: true,
+    dateAdded: "2026-03-21",
+    playCount: 0,
+    folder: "EPIC",
+    audioSrc: audioPublicPath(AUDIO.survive),
+  },
+  {
+    id: "4",
+    title: "Open Arms",
+    artist: "EPIC: The Musical",
+    album: "EPIC: The Musical Animatics",
+    duration: 240,
+    artwork: albumArt4,
+    isFavorite: false,
+    dateAdded: "2026-03-21",
+    playCount: 0,
+    folder: "EPIC",
+    audioSrc: audioPublicPath(AUDIO.openArms),
+  },
+  {
+    id: "5",
+    title: "The Horse and The Infant + Just a Man",
+    artist: "EPIC: The Musical",
+    album: "EPIC: The Musical Animatics",
+    duration: 240,
+    artwork: albumArt5,
+    isFavorite: false,
+    dateAdded: "2026-03-21",
+    playCount: 0,
+    folder: "EPIC",
+    audioSrc: audioPublicPath(AUDIO.horse),
+  },
+  {
+    id: "6",
+    title: "Full Speed Ahead",
+    artist: "EPIC: The Musical",
+    album: "EPIC: The Musical Animatics",
+    duration: 240,
+    artwork: albumArt6,
+    isFavorite: false,
+    dateAdded: "2026-03-21",
+    playCount: 0,
+    folder: "EPIC",
+    audioSrc: audioPublicPath(AUDIO.fullSpeed),
+  },
 ];
 
 export const demoPlaylists: Playlist[] = [
-  { id: "p1", name: "Chill Vibes", artwork: albumArt5, songIds: ["1", "4", "5", "10", "11"], createdAt: "2025-03-01" },
-  { id: "p2", name: "Late Night Coding", artwork: albumArt2, songIds: ["2", "3", "6", "8", "9"], createdAt: "2025-02-15" },
-  { id: "p3", name: "Workout Energy", artwork: albumArt3, songIds: ["3", "5", "7", "9"], createdAt: "2025-03-10" },
+  {
+    id: "p1",
+    name: "EPIC Essentials",
+    artwork: albumArt1,
+    songIds: ["1", "2", "3"],
+    createdAt: "2026-03-21",
+  },
+  {
+    id: "p2",
+    name: "Epic Moments",
+    artwork: albumArt4,
+    songIds: ["4", "5", "6"],
+    createdAt: "2026-03-21",
+  },
+  {
+    id: "p3",
+    name: "Full Journey",
+    artwork: albumArt3,
+    songIds: ["1", "2", "3", "4", "5", "6"],
+    createdAt: "2026-03-21",
+  },
 ];
 
 export const formatDuration = (seconds: number): string => {
