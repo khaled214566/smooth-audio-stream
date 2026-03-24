@@ -56,11 +56,13 @@ export class AudioLibraryService {
           artist: "Unknown Artist",
           album: "Unknown Album",
           duration: 0,
-          artwork: this.getDefaultArtwork(),
+          artwork: "/placeholder.svg",
           isFavorite: false,
-          dateAdded: new Date().toISOString().split('T')[0],
+          dateAdded: file.modified
+            ? new Date(file.modified).toISOString().split("T")[0]
+            : new Date().toISOString().split("T")[0],
           playCount: 0,
-          folder: "Downloads",
+          folder: this.extractFolderFromPath(file.publicPath),
           audioSrc: file.publicPath,
         };
 
@@ -76,12 +78,14 @@ export class AudioLibraryService {
       }
 
       // Sort by date added (newest first)
-      newSongs.sort((a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime());
+      newSongs.sort(
+        (a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime()
+      );
 
       this.songs = newSongs;
       this.notifyListeners();
     } catch (error) {
-      console.error('Failed to scan audio directory:', error);
+      console.error("Failed to scan audio directory:", error);
       throw error;
     }
   }
@@ -94,18 +98,18 @@ export class AudioLibraryService {
       return existing;
     }
 
-    const filename = audioPath.split('/').pop() || 'Unknown';
+    const filename = audioPath.split("/").pop() || "Unknown";
     const basicSong: Song = {
       id: this.generateId(),
       title: this.extractTitleFromFilename(filename),
       artist: "Unknown Artist",
       album: "Unknown Album",
       duration: 0,
-      artwork: this.getDefaultArtwork(),
+      artwork: "/placeholder.svg",
       isFavorite: false,
-      dateAdded: new Date().toISOString().split('T')[0],
+      dateAdded: new Date().toISOString().split("T")[0],
       playCount: 0,
-      folder: "Downloads",
+      folder: this.extractFolderFromPath(audioPath),
       audioSrc: audioPath,
     };
 
@@ -113,7 +117,7 @@ export class AudioLibraryService {
     try {
       const metadata = await readAudioTags(audioPath);
       const enhancedSong = this.enhanceSongWithMetadata(basicSong, metadata);
-      this.songs.unshift(enhancedSong); // Add to beginning
+      this.songs.unshift(enhancedSong);
     } catch (error) {
       console.warn(`Failed to read metadata for ${filename}:`, error);
       this.songs.unshift(basicSong);
@@ -131,51 +135,14 @@ export class AudioLibraryService {
 
   // Update song
   updateSong(songId: string, updates: Partial<Song>): void {
-    this.songs = this.songs.map(s => 
+    this.songs = this.songs.map(s =>
       s.id === songId ? { ...s, ...updates } : s
     );
     this.notifyListeners();
   }
 
-  // Helper methods
-  private generateId(): string {
-    return Date.now().toString() + Math.random().toString(36).substr(2, 9);
-  }
-
-  private extractTitleFromFilename(filename: string): string {
-    // Remove extension and clean up
-    const nameWithoutExt = filename.replace(/\.[^/.]+$/, "");
-    // Remove common patterns like download_ timestamps
-    const cleaned = nameWithoutExt.replace(/^download_\d+[_-]?/, "");
-    // Replace underscores and hyphens with spaces
-    const spaced = cleaned.replace(/[_-]/g, " ");
-    // Capitalize words
-    return spaced.replace(/\b\w/g, l => l.toUpperCase());
-  }
-
-  private getDefaultArtwork(): string {
-    // Return a default artwork path or use one of the existing ones
-    return "/placeholder.svg";
-  }
-
-  private enhanceSongWithMetadata(song: Song, metadata: TrackMediaTags): Song {
-    return {
-      ...song,
-      title: metadata.title || song.title,
-      artist: metadata.artist || song.artist,
-      album: metadata.album || song.album,
-      // Use metadata year if available, otherwise keep current date added
-      dateAdded: metadata.year ? metadata.year : song.dateAdded,
-      // You could also extract genre, track number, etc. if needed
-    };
-  }
-
-  // Initialize with demo songs and scan for new ones
+  // Initialize by scanning all audio files
   async initialize(): Promise<void> {
-    // First, add existing demo songs from the audio folder
-    await this.loadExistingSongs();
-    
-    // Then scan for downloaded songs
     await this.scanAndUpdateSongs();
   }
 
@@ -184,95 +151,45 @@ export class AudioLibraryService {
     await this.scanAndUpdateSongs();
   }
 
-  // Load existing songs that are already in the audio folder
-  private async loadExistingSongs(): Promise<void> {
-    try {
-      // Map of existing demo songs
-      const existingSongs = [
-        {
-          id: "1",
-          title: "Warrior of the Mind",
-          artist: "EPIC: The Musical",
-          album: "EPIC: The Musical Animatics",
-          duration: 240,
-          artwork: "/assets/album-art-1.jpg",
-          isFavorite: true,
-          dateAdded: "2026-03-21",
-          playCount: 0,
-          folder: "EPIC",
-          audioSrc: "/audio/Warrior of the Mind - EPIC： The Musical Animatic (FLASH WARNING) [_N15ek-uTl0].mp3",
-        },
-        {
-          id: "2",
-          title: "Polyphemus",
-          artist: "EPIC: The Musical",
-          album: "EPIC: The Musical Animatics",
-          duration: 240,
-          artwork: "/assets/album-art-2.jpg",
-          isFavorite: false,
-          dateAdded: "2026-03-21",
-          playCount: 0,
-          folder: "EPIC",
-          audioSrc: "/audio/Polyphemus - EPIC： The Musical Animatic [kKgwQy30R-c].mp3",
-        },
-        {
-          id: "3",
-          title: "Survive",
-          artist: "EPIC: The Musical",
-          album: "EPIC: The Musical Animatics",
-          duration: 240,
-          artwork: "/assets/album-art-3.jpg",
-          isFavorite: true,
-          dateAdded: "2026-03-21",
-          playCount: 0,
-          folder: "EPIC",
-          audioSrc: "/audio/Survive - EPIC： The Musical Animatic (CW： GORE AND FLASH) [6GpuV9iyQYU].mp3",
-        },
-        {
-          id: "4",
-          title: "Open Arms",
-          artist: "EPIC: The Musical",
-          album: "EPIC: The Musical Animatics",
-          duration: 240,
-          artwork: "/assets/album-art-4.jpg",
-          isFavorite: false,
-          dateAdded: "2026-03-21",
-          playCount: 0,
-          folder: "EPIC",
-          audioSrc: "/audio/OPEN ARMS ⧸⧸ Epic： the musical animatic [bKMgFJq88Is].mp3",
-        },
-        {
-          id: "5",
-          title: "The Horse and The Infant + Just a Man",
-          artist: "EPIC: The Musical",
-          album: "EPIC: The Musical Animatics",
-          duration: 240,
-          artwork: "/assets/album-art-5.jpg",
-          isFavorite: false,
-          dateAdded: "2026-03-21",
-          playCount: 0,
-          folder: "EPIC",
-          audioSrc: "/audio/horse-infant.mp3",
-        },
-        {
-          id: "6",
-          title: "Full Speed Ahead",
-          artist: "EPIC: The Musical",
-          album: "EPIC: The Musical Animatics",
-          duration: 240,
-          artwork: "/assets/album-art-6.jpg",
-          isFavorite: false,
-          dateAdded: "2026-03-21",
-          playCount: 0,
-          folder: "EPIC",
-          audioSrc: "/audio/Full Speed Ahead ｜ EPIC： The Musical ｜ Updated Audio [5NDW9cHZQAg].mp3",
-        },
-      ];
+  // Helper methods
+  private generateId(): string {
+    return Date.now().toString() + Math.random().toString(36).substr(2, 9);
+  }
 
-      this.songs = existingSongs;
-      console.log('Loaded existing songs:', existingSongs.length);
-    } catch (error) {
-      console.error('Failed to load existing songs:', error);
+  private extractTitleFromFilename(filename: string): string {
+    // Remove extension
+    const nameWithoutExt = filename.replace(/\.[^/.]+$/, "");
+    // Remove common yt-dlp patterns like [videoId] at the end
+    const withoutId = nameWithoutExt.replace(/\s*\[[A-Za-z0-9_-]{8,}\]$/, "");
+    // Remove common download_ timestamps
+    const cleaned = withoutId.replace(/^download_\d+[_-]?/, "");
+    // Replace underscores and hyphens with spaces
+    const spaced = cleaned.replace(/[_-]/g, " ").trim();
+    // Capitalize words
+    return spaced.replace(/\b\w/g, l => l.toUpperCase());
+  }
+
+  // Derive a folder name from the file path
+  // e.g. "/audio/EPIC/song.mp3" → "EPIC"
+  //      "/audio/song.mp3"      → "audio"
+  private extractFolderFromPath(publicPath: string): string {
+    const parts = publicPath.split("/").filter(Boolean);
+    // Return the second-to-last segment if it exists, otherwise the last
+    if (parts.length >= 2) {
+      return parts[parts.length - 2];
     }
+    return parts[parts.length - 1] || "Unknown";
+  }
+
+  private enhanceSongWithMetadata(song: Song, metadata: TrackMediaTags): Song {
+    return {
+      ...song,
+      title: metadata.title || song.title,
+      artist: metadata.artist || song.artist,
+      album: metadata.album || song.album,
+      dateAdded: metadata.year ? metadata.year : song.dateAdded,
+      // Use embedded artwork if available, otherwise keep placeholder
+      artwork: metadata.artworkObjectUrl || song.artwork,
+    };
   }
 }
