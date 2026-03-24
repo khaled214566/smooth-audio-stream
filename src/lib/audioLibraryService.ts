@@ -2,10 +2,41 @@ import { Song } from "@/data/demoData";
 import { DownloadService, type AudioFile } from "./downloadService";
 import { readAudioTags, type TrackMediaTags } from "./readAudioTags";
 
+const FAVORITES_STORAGE_KEY = "smooth-audio-stream:favorites";
+
 export class AudioLibraryService {
   private static instance: AudioLibraryService;
   private songs: Song[] = [];
   private listeners: ((songs: Song[]) => void)[] = [];
+
+  // ── Favorites persistence ───────────────────────────────────────────────────
+  private loadFavoriteKeys(): Set<string> {
+    try {
+      const raw = localStorage.getItem(FAVORITES_STORAGE_KEY);
+      if (!raw) return new Set();
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? new Set<string>(parsed) : new Set();
+    } catch {
+      return new Set();
+    }
+  }
+
+  private saveFavoriteKeys(keys: Set<string>): void {
+    try {
+      localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify([...keys]));
+    } catch {
+      // Storage unavailable – silently ignore.
+    }
+  }
+
+  private applyFavorites(songs: Song[]): Song[] {
+    const favKeys = this.loadFavoriteKeys();
+    return songs.map((s) => ({
+      ...s,
+      isFavorite: s.audioSrc ? favKeys.has(s.audioSrc) : s.isFavorite,
+    }));
+  }
+  // ───────────────────────────────────────────────────────────────────────────
 
   private constructor() {}
 
@@ -35,6 +66,20 @@ export class AudioLibraryService {
     return this.songs;
   }
 
+  // Load actual duration from the audio file via the browser Audio API
+  private getDuration(audioSrc: string): Promise<number> {
+    return new Promise((resolve) => {
+      const audio = new Audio();
+      audio.preload = "metadata";
+      audio.onloadedmetadata = () => {
+        resolve(Math.floor(audio.duration));
+        audio.src = ""; // release resource
+      };
+      audio.onerror = () => resolve(0); // fallback silently
+      audio.src = audioSrc;
+    });
+  }
+
   // Scan audio directory and update songs
   async scanAndUpdateSongs(): Promise<void> {
     try {
@@ -42,7 +87,7 @@ export class AudioLibraryService {
       const newSongs: Song[] = [];
 
       for (const file of audioFiles) {
-        // Check if song already exists
+        // Reuse existing song if already loaded (preserves duration, artwork, etc.)
         const existingSong = this.songs.find(s => s.audioSrc === file.publicPath);
         if (existingSong) {
           newSongs.push(existingSong);
@@ -70,9 +115,11 @@ export class AudioLibraryService {
         try {
           const metadata = await readAudioTags(file.publicPath);
           const enhancedSong = this.enhanceSongWithMetadata(basicSong, metadata);
+          enhancedSong.duration = await this.getDuration(file.publicPath);
           newSongs.push(enhancedSong);
         } catch (error) {
           console.warn(`Failed to read metadata for ${file.filename}:`, error);
+          basicSong.duration = await this.getDuration(file.publicPath);
           newSongs.push(basicSong);
         }
       }
@@ -82,7 +129,7 @@ export class AudioLibraryService {
         (a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime()
       );
 
-      this.songs = newSongs;
+      this.songs = this.applyFavorites(newSongs);
       this.notifyListeners();
     } catch (error) {
       console.error("Failed to scan audio directory:", error);
@@ -117,12 +164,15 @@ export class AudioLibraryService {
     try {
       const metadata = await readAudioTags(audioPath);
       const enhancedSong = this.enhanceSongWithMetadata(basicSong, metadata);
+      enhancedSong.duration = await this.getDuration(audioPath);
       this.songs.unshift(enhancedSong);
     } catch (error) {
       console.warn(`Failed to read metadata for ${filename}:`, error);
+      basicSong.duration = await this.getDuration(audioPath);
       this.songs.unshift(basicSong);
     }
 
+    this.songs = this.applyFavorites(this.songs);
     this.notifyListeners();
     return this.songs[0];
   }
@@ -138,6 +188,21 @@ export class AudioLibraryService {
     this.songs = this.songs.map(s =>
       s.id === songId ? { ...s, ...updates } : s
     );
+
+    // Persist favorites whenever isFavorite is part of the update
+    if ("isFavorite" in updates) {
+      const favKeys = this.loadFavoriteKeys();
+      this.songs.forEach((s) => {
+        if (!s.audioSrc) return;
+        if (s.isFavorite) {
+          favKeys.add(s.audioSrc);
+        } else {
+          favKeys.delete(s.audioSrc);
+        }
+      });
+      this.saveFavoriteKeys(favKeys);
+    }
+
     this.notifyListeners();
   }
 
@@ -174,7 +239,6 @@ export class AudioLibraryService {
   //      "/audio/song.mp3"      → "audio"
   private extractFolderFromPath(publicPath: string): string {
     const parts = publicPath.split("/").filter(Boolean);
-    // Return the second-to-last segment if it exists, otherwise the last
     if (parts.length >= 2) {
       return parts[parts.length - 2];
     }
@@ -188,7 +252,6 @@ export class AudioLibraryService {
       artist: metadata.artist || song.artist,
       album: metadata.album || song.album,
       dateAdded: metadata.year ? metadata.year : song.dateAdded,
-      // Use embedded artwork if available, otherwise keep placeholder
       artwork: metadata.artworkObjectUrl || song.artwork,
     };
   }

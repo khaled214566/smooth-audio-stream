@@ -283,18 +283,9 @@ export const AudioProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const toggleFavorite = useCallback((songId: string) => {
-    const libraryService = AudioLibraryService.getInstance();
-    const song = libraryService.getSongs().find((s) => s.id === songId);
-    if (!song) return;
-    const newFavorite = !song.isFavorite;
-
-    // Persist via the library service — it saves to localStorage and notifies
-    // listeners, which will push the updated songs array back into this context.
-    libraryService.updateSong(songId, { isFavorite: newFavorite });
-
-    // Also keep currentSong in sync if this is the active track
+    setSongs((prev) => prev.map((s) => (s.id === songId ? { ...s, isFavorite: !s.isFavorite } : s)));
     if (currentSong?.id === songId) {
-      setCurrentSong((prev) => (prev ? { ...prev, isFavorite: newFavorite } : null));
+      setCurrentSong((prev) => (prev ? { ...prev, isFavorite: !prev.isFavorite } : null));
     }
   }, [currentSong]);
 
