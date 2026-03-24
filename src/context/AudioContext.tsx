@@ -7,7 +7,9 @@ import React, {
   useRef,
   useEffect,
 } from "react";
-import { Song, demoSongs } from "@/data/demoData";
+import { Song } from "@/data/demoData";
+import { readAudioTags, type TrackMediaTags } from "@/lib/readAudioTags";
+import { AudioLibraryService } from "@/lib/audioLibraryService";
 
 type RepeatMode = "off" | "all" | "one";
 
@@ -18,6 +20,8 @@ interface AudioContextType {
   currentTime: number;
   /** Duration for UI (from file metadata when using real audio, else song.duration). */
   playbackDuration: number;
+  /** ID3 / file tags from jsmediatags, keyed by song id (when loaded). */
+  trackTags: Record<string, TrackMediaTags>;
   volume: number;
   shuffle: boolean;
   repeatMode: RepeatMode;
@@ -45,7 +49,7 @@ export const useAudio = () => {
 };
 
 export const AudioProvider = ({ children }: { children: ReactNode }) => {
-  const [songs, setSongs] = useState<Song[]>(demoSongs);
+  const [songs, setSongs] = useState<Song[]>([]);
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [queue, setQueue] = useState<Song[]>([]);
@@ -55,14 +59,67 @@ export const AudioProvider = ({ children }: { children: ReactNode }) => {
   const [volume, setVolumeState] = useState(0.75);
   const [shuffle, setShuffle] = useState(false);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>("off");
+  const [trackTags, setTrackTags] = useState<Record<string, TrackMediaTags>>({});
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const trackTagsRef = useRef(trackTags);
+  trackTagsRef.current = trackTags;
   const nextSongRef = useRef<() => void>(() => {});
   const repeatModeRef = useRef<RepeatMode>(repeatMode);
   const currentSongRef = useRef<Song | null>(null);
 
   currentSongRef.current = currentSong;
   repeatModeRef.current = repeatMode;
+
+  // Initialize audio library
+  useEffect(() => {
+    const libraryService = AudioLibraryService.getInstance();
+    
+    // Initialize the library
+    libraryService.initialize().then(() => {
+      console.log('Audio library initialized');
+    }).catch(error => {
+      console.error('Failed to initialize audio library:', error);
+    });
+
+    // Subscribe to song updates
+    const unsubscribe = libraryService.subscribe((librarySongs) => {
+      setSongs(librarySongs);
+      
+      // Load tags for new songs
+      let cancelled = false;
+      librarySongs.forEach((song) => {
+        if (!song.audioSrc) return;
+        readAudioTags(song.audioSrc)
+          .then((tags) => {
+            if (cancelled) {
+              if (tags.artworkObjectUrl) URL.revokeObjectURL(tags.artworkObjectUrl);
+              return;
+            }
+            setTrackTags((prev) => {
+              const oldArt = prev[song.id]?.artworkObjectUrl;
+              if (oldArt && oldArt !== tags.artworkObjectUrl) URL.revokeObjectURL(oldArt);
+              return { ...prev, [song.id]: tags };
+            });
+          })
+          .catch(() => {});
+      });
+
+      return () => {
+        cancelled = true;
+      };
+    });
+
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      Object.values(trackTagsRef.current).forEach((t) => {
+        if (t?.artworkObjectUrl) URL.revokeObjectURL(t.artworkObjectUrl);
+      });
+    };
+  }, []);
 
   useEffect(() => {
     if (currentSong) setPlaybackDuration(currentSong.duration);
@@ -248,6 +305,7 @@ export const AudioProvider = ({ children }: { children: ReactNode }) => {
         queue,
         currentTime,
         playbackDuration,
+        trackTags,
         volume,
         shuffle,
         repeatMode,

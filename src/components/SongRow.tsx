@@ -1,6 +1,6 @@
 import { useAudio } from "@/context/AudioContext";
 import { formatDuration, Song } from "@/data/demoData";
-import { Heart, Play, Pause, MoreHorizontal } from "lucide-react";
+import { Heart, Play, Pause } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface SongRowProps {
@@ -10,10 +10,15 @@ interface SongRowProps {
 }
 
 const SongRow = ({ song, index, showAlbum = true }: SongRowProps) => {
-  const { playSong, currentSong, isPlaying, togglePlay, toggleFavorite, songs, playQueue } = useAudio();
+  const { currentSong, isPlaying, togglePlay, toggleFavorite, songs, playQueue, trackTags } = useAudio();
 
   const isActive = currentSong?.id === song.id;
   const actualSong = songs.find((s) => s.id === song.id) || song;
+  const meta = trackTags[song.id];
+  const rowTitle = meta?.title ?? song.title;
+  const rowArtist = meta?.artist ?? song.artist;
+  const rowAlbum = meta?.album ?? song.album;
+  const rowArtwork = meta?.artworkObjectUrl ?? song.artwork;
 
   const handleClick = () => {
     if (isActive) {
@@ -50,17 +55,17 @@ const SongRow = ({ song, index, showAlbum = true }: SongRowProps) => {
         )}
       </div>
 
-      <img src={song.artwork} alt={song.title} className="w-10 h-10 rounded object-cover" />
+      <img src={rowArtwork} alt={rowTitle} className="w-10 h-10 rounded object-cover" />
 
       <div className="flex-1 min-w-0">
         <p className={`text-sm font-medium line-clamp-1 ${isActive ? "text-primary" : "text-foreground"}`}>
-          {song.title}
+          {rowTitle}
         </p>
-        <p className="text-xs text-muted-foreground line-clamp-1">{song.artist}</p>
+        <p className="text-xs text-muted-foreground line-clamp-1">{rowArtist}</p>
       </div>
 
       {showAlbum && (
-        <span className="hidden md:block text-sm text-muted-foreground flex-1 line-clamp-1">{song.album}</span>
+        <span className="hidden md:block text-sm text-muted-foreground flex-1 line-clamp-1">{rowAlbum}</span>
       )}
 
       <button

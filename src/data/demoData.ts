@@ -39,8 +39,8 @@ const AUDIO = {
   survive:
     "Survive - EPIC： The Musical Animatic (CW： GORE AND FLASH) [6GpuV9iyQYU].mp3",
   openArms: "OPEN ARMS ⧸⧸ Epic： the musical animatic [bKMgFJq88Is].mp3",
-  horse:
-    "The Horse and The Infant + Just a Man ｜ EPIC： The Musical Animatics [QXeYVV1zcUc].mp3",
+  /** Served as ASCII alias — long Unicode filename breaks some static servers (returns HTML instead of audio). */
+  horse: "horse-infant.mp3",
   fullSpeed:
     "Full Speed Ahead ｜ EPIC： The Musical ｜ Updated Audio [5NDW9cHZQAg].mp3",
 } as const;
@@ -109,7 +109,7 @@ export const demoSongs: Song[] = [
     dateAdded: "2026-03-21",
     playCount: 0,
     folder: "EPIC",
-    audioSrc: audioPublicPath(AUDIO.horse),
+    audioSrc: "/audio/" + AUDIO.horse,
   },
   {
     id: "6",
@@ -150,9 +150,11 @@ export const demoPlaylists: Playlist[] = [
   },
 ];
 
+/** mm:ss using whole seconds only (no fractional seconds / milliseconds). */
 export const formatDuration = (seconds: number): string => {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
+  const s = Math.floor(Math.max(0, Number.isFinite(seconds) ? seconds : 0));
+  const mins = Math.floor(s / 60);
+  const secs = s % 60;
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 };
 

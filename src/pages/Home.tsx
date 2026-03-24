@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { getAlbums } from "@/data/demoData";
 
 const HomePage = () => {
-  const { songs, playQueue } = useAudio();
+  const { songs, playQueue, trackTags } = useAudio();
 
   const recentlyAdded = [...songs].sort((a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime()).slice(0, 5);
   const mostPlayed = [...songs].sort((a, b) => b.playCount - a.playCount).slice(0, 5);
@@ -20,7 +20,11 @@ const HomePage = () => {
 
       {/* Quick play cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-10">
-        {songs.slice(0, 6).map((song, i) => (
+        {songs.slice(0, 6).map((song, i) => {
+          const meta = trackTags[song.id];
+          const label = meta?.title ?? song.title;
+          const art = meta?.artworkObjectUrl ?? song.artwork;
+          return (
           <motion.div
             key={song.id}
             initial={{ opacity: 0, y: 10 }}
@@ -29,13 +33,14 @@ const HomePage = () => {
             onClick={() => playQueue(songs, songs.indexOf(song))}
             className="flex items-center gap-3 bg-secondary/50 hover:bg-secondary rounded-lg overflow-hidden cursor-pointer group transition-colors"
           >
-            <img src={song.artwork} alt={song.title} className="w-12 h-12 md:w-14 md:h-14 object-cover" />
-            <span className="text-sm font-medium text-foreground line-clamp-1 flex-1">{song.title}</span>
+            <img src={art} alt={label} className="w-12 h-12 md:w-14 md:h-14 object-cover" />
+            <span className="text-sm font-medium text-foreground line-clamp-1 flex-1">{label}</span>
             <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center mr-3 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
               <Play className="h-4 w-4 text-primary-foreground ml-0.5" />
             </div>
           </motion.div>
-        ))}
+        );
+        })}
       </div>
 
       {/* Album row */}
