@@ -101,7 +101,7 @@ export class AudioLibraryService {
           artist: "Unknown Artist",
           album: "Unknown Album",
           duration: 0,
-          artwork: "/placeholder.svg",
+          artwork: "/app_final.png",
           isFavorite: false,
           dateAdded: file.modified
             ? new Date(file.modified).toISOString().split("T")[0]
