@@ -18,7 +18,7 @@ const queryClient = new QueryClient();
 const AppLayout = () => (
   <div className="flex w-full min-h-screen">
     <AppSidebar />
-    <main className="flex-1 overflow-y-auto h-screen">
+    <main className="flex-1 overflow-y-auto h-screen pb-[130px] md:pb-[73px]">
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/library" element={<LibraryPage />} />

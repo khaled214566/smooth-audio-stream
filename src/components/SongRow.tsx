@@ -7,9 +7,10 @@ interface SongRowProps {
   song: Song;
   index: number;
   showAlbum?: boolean;
+  queue?: Song[];
 }
 
-const SongRow = ({ song, index, showAlbum = true }: SongRowProps) => {
+const SongRow = ({ song, index, showAlbum = true, queue }: SongRowProps) => {
   const { currentSong, isPlaying, togglePlay, toggleFavorite, songs, playQueue, trackTags } = useAudio();
 
   const isActive = currentSong?.id === song.id;
@@ -24,9 +25,9 @@ const SongRow = ({ song, index, showAlbum = true }: SongRowProps) => {
     if (isActive) {
       togglePlay();
     } else {
-      const allSongs = songs;
-      const idx = allSongs.findIndex((s) => s.id === song.id);
-      playQueue(allSongs, idx >= 0 ? idx : 0);
+      const playableSongs = queue ?? songs;
+      const idx = playableSongs.findIndex((s) => s.id === song.id);
+      playQueue(playableSongs, idx >= 0 ? idx : 0);
     }
   };
 

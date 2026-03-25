@@ -28,7 +28,7 @@ const FavoritesPage = () => {
       ) : (
         <div className="space-y-1">
           {favorites.map((song, i) => (
-            <SongRow key={song.id} song={song} index={i} />
+            <SongRow key={song.id} song={song} index={i} queue={favorites} />
           ))}
         </div>
       )}
