@@ -11,6 +11,18 @@ import { Song } from "@/data/demoData";
 import { readAudioTags, type TrackMediaTags } from "@/lib/readAudioTags";
 import { AudioLibraryService } from "@/lib/audioLibraryService";
 
+/**
+ * Generates a full random permutation of indices.
+ */
+function buildShuffleOrder(length: number): number[] {
+  const indices = Array.from({ length }, (_, i) => i);
+  for (let i = indices.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [indices[i], indices[j]] = [indices[j], indices[i]];
+  }
+  return indices;
+}
+
 type RepeatMode = "off" | "all" | "one";
 
 interface AudioContextType {
@@ -18,9 +30,7 @@ interface AudioContextType {
   isPlaying: boolean;
   queue: Song[];
   currentTime: number;
-  /** Duration for UI (from file metadata when using real audio, else song.duration). */
   playbackDuration: number;
-  /** ID3 / file tags from jsmediatags, keyed by song id (when loaded). */
   trackTags: Record<string, TrackMediaTags>;
   volume: number;
   shuffle: boolean;
@@ -53,7 +63,7 @@ export const AudioProvider = ({ children }: { children: ReactNode }) => {
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [queue, setQueue] = useState<Song[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(0); // Index in the original queue
   const [currentTime, setCurrentTime] = useState(0);
   const [playbackDuration, setPlaybackDuration] = useState(0);
   const [volume, setVolumeState] = useState(0.75);
@@ -61,55 +71,43 @@ export const AudioProvider = ({ children }: { children: ReactNode }) => {
   const [repeatMode, setRepeatMode] = useState<RepeatMode>("off");
   const [trackTags, setTrackTags] = useState<Record<string, TrackMediaTags>>({});
 
+  const shuffleOrderRef = useRef<number[]>([]);
+  const shufflePosRef = useRef<number>(0); // Current position in the shuffleOrder array
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const trackTagsRef = useRef(trackTags);
-  trackTagsRef.current = trackTags;
   const nextSongRef = useRef<() => void>(() => {});
   const repeatModeRef = useRef<RepeatMode>(repeatMode);
   const currentSongRef = useRef<Song | null>(null);
 
+  trackTagsRef.current = trackTags;
   currentSongRef.current = currentSong;
   repeatModeRef.current = repeatMode;
 
   // Initialize audio library
   useEffect(() => {
     const libraryService = AudioLibraryService.getInstance();
-    
-    // Initialize the library
-    libraryService.initialize().then(() => {
-      console.log('Audio library initialized');
-    }).catch(error => {
-      console.error('Failed to initialize audio library:', error);
-    });
+    libraryService.initialize().catch(console.error);
 
-    // Subscribe to song updates
     const unsubscribe = libraryService.subscribe((librarySongs) => {
       setSongs(librarySongs);
-      
-      // Load tags for new songs
       let cancelled = false;
       librarySongs.forEach((song) => {
         if (!song.audioSrc) return;
-        readAudioTags(song.audioSrc)
-          .then((tags) => {
-            if (cancelled) {
-              if (tags.artworkObjectUrl) URL.revokeObjectURL(tags.artworkObjectUrl);
-              return;
-            }
-            setTrackTags((prev) => {
-              const oldArt = prev[song.id]?.artworkObjectUrl;
-              if (oldArt && oldArt !== tags.artworkObjectUrl) URL.revokeObjectURL(oldArt);
-              return { ...prev, [song.id]: tags };
-            });
-          })
-          .catch(() => {});
+        readAudioTags(song.audioSrc).then((tags) => {
+          if (cancelled) {
+            if (tags.artworkObjectUrl) URL.revokeObjectURL(tags.artworkObjectUrl);
+            return;
+          }
+          setTrackTags((prev) => {
+            const oldArt = prev[song.id]?.artworkObjectUrl;
+            if (oldArt && oldArt !== tags.artworkObjectUrl) URL.revokeObjectURL(oldArt);
+            return { ...prev, [song.id]: tags };
+          });
+        }).catch(() => {});
       });
-
-      return () => {
-        cancelled = true;
-      };
+      return () => { cancelled = true; };
     });
-
     return unsubscribe;
   }, []);
 
@@ -122,23 +120,37 @@ export const AudioProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   useEffect(() => {
-    if (currentSong) setPlaybackDuration(currentSong.duration);
-    else setPlaybackDuration(0);
+    setPlaybackDuration(currentSong?.duration ?? 0);
   }, [currentSong?.id, currentSong?.duration]);
 
   const nextSong = useCallback(() => {
     if (queue.length === 0) return;
+
     if (repeatMode === "one") {
-      setCurrentTime(0);
       const a = audioRef.current;
-      if (currentSongRef.current?.audioSrc && a) {
-        a.currentTime = 0;
-      }
+      if (a) a.currentTime = 0;
+      setCurrentTime(0);
       return;
     }
+
     let nextIdx: number;
+
     if (shuffle) {
-      nextIdx = Math.floor(Math.random() * queue.length);
+      // Move to next position in shuffle list
+      const nextPos = shufflePosRef.current + 1;
+      
+      // If we reach the end of the set
+      if (nextPos >= shuffleOrderRef.current.length) {
+        if (repeatMode === "off") {
+          setIsPlaying(false);
+          return;
+        }
+        // Repeat the existing shuffle set from start
+        shufflePosRef.current = 0;
+      } else {
+        shufflePosRef.current = nextPos;
+      }
+      nextIdx = shuffleOrderRef.current[shufflePosRef.current];
     } else {
       nextIdx = currentIndex + 1;
       if (nextIdx >= queue.length) {
@@ -149,6 +161,7 @@ export const AudioProvider = ({ children }: { children: ReactNode }) => {
         }
       }
     }
+
     setCurrentIndex(nextIdx);
     setCurrentSong(queue[nextIdx]);
     setCurrentTime(0);
@@ -156,34 +169,35 @@ export const AudioProvider = ({ children }: { children: ReactNode }) => {
 
   nextSongRef.current = nextSong;
 
-  useEffect(() => {
-    if (!isPlaying || !currentSong || currentSong.audioSrc) return;
-    const dur = currentSong.duration;
-    const interval = setInterval(() => {
-      setCurrentTime((prev) => {
-        if (prev >= dur) {
-          nextSongRef.current();
-          return 0;
-        }
-        return prev + 1;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [isPlaying, currentSong?.id, currentSong?.audioSrc, currentSong?.duration]);
-
-  useEffect(() => {
-    if (currentSong?.audioSrc) return;
-    const a = audioRef.current;
-    if (a) {
-      a.pause();
-      a.removeAttribute("src");
-      a.load();
+  const prevSong = useCallback(() => {
+    if (currentTime > 3) {
+      const a = audioRef.current;
+      if (a) a.currentTime = 0;
+      setCurrentTime(0);
+      return;
     }
-  }, [currentSong?.id, currentSong?.audioSrc]);
 
+    if (queue.length === 0) return;
+
+    let prevIdx: number;
+
+    if (shuffle) {
+      // Wrap backward to end if at start (Continuous loop)
+      const prevPos = (shufflePosRef.current - 1 + shuffleOrderRef.current.length) % shuffleOrderRef.current.length;
+      shufflePosRef.current = prevPos;
+      prevIdx = shuffleOrderRef.current[prevPos];
+    } else {
+      prevIdx = (currentIndex - 1 + queue.length) % queue.length;
+    }
+
+    setCurrentIndex(prevIdx);
+    setCurrentSong(queue[prevIdx]);
+    setCurrentTime(0);
+  }, [queue, currentIndex, currentTime, shuffle]);
+
+  // Audio Engine Management
   useEffect(() => {
     if (!currentSong?.audioSrc) return;
-
     const a = audioRef.current ?? new Audio();
     audioRef.current = a;
     a.volume = volume;
@@ -197,14 +211,13 @@ export const AudioProvider = ({ children }: { children: ReactNode }) => {
       }
     };
     const onEnded = () => {
-      const mode = repeatModeRef.current;
-      if (mode === "one") {
+      if (repeatModeRef.current === "one") {
         a.currentTime = 0;
         setCurrentTime(0);
         void a.play().catch(() => setIsPlaying(false));
-        return;
+      } else {
+        nextSongRef.current();
       }
-      nextSongRef.current();
     };
 
     a.addEventListener("timeupdate", onTimeUpdate);
@@ -224,13 +237,11 @@ export const AudioProvider = ({ children }: { children: ReactNode }) => {
   }, [volume]);
 
   useEffect(() => {
-    if (!currentSong?.audioSrc) return;
-    const a = audioRef.current;
-    if (!a?.src) return;
+    if (!currentSong?.audioSrc || !audioRef.current) return;
     if (isPlaying) {
-      void a.play().catch(() => setIsPlaying(false));
+      void audioRef.current.play().catch(() => setIsPlaying(false));
     } else {
-      a.pause();
+      audioRef.current.pause();
     }
   }, [isPlaying, currentSong?.id, currentSong?.audioSrc]);
 
@@ -246,60 +257,59 @@ export const AudioProvider = ({ children }: { children: ReactNode }) => {
     setCurrentSong(newQueue[startIndex]);
     setIsPlaying(true);
     setCurrentTime(0);
+
+    // Create a new full shuffle order
+    const order = buildShuffleOrder(newQueue.length);
+    // Sync the current pointer to wherever the clicked song ended up in the shuffle
+    const posInShuffle = order.indexOf(startIndex);
+    
+    shuffleOrderRef.current = order;
+    shufflePosRef.current = posInShuffle;
   }, []);
 
   const togglePlay = useCallback(() => setIsPlaying((p) => !p), []);
 
-  const prevSong = useCallback(() => {
-    if (currentTime > 3) {
-      setCurrentTime(0);
-      const a = audioRef.current;
-      if (currentSongRef.current?.audioSrc && a) {
-        a.currentTime = 0;
-      }
-      return;
-    }
-    if (queue.length === 0) return;
-    const prevIdx = currentIndex - 1 < 0 ? queue.length - 1 : currentIndex - 1;
-    setCurrentIndex(prevIdx);
-    setCurrentSong(queue[prevIdx]);
-    setCurrentTime(0);
-  }, [queue, currentIndex, currentTime]);
-
   const seekTo = useCallback((time: number) => {
     const dur = playbackDuration > 0 ? playbackDuration : currentSongRef.current?.duration ?? 0;
-    const clamped = Math.max(0, Math.min(time, dur || time));
+    const clamped = Math.max(0, Math.min(time, dur));
     setCurrentTime(clamped);
-    const song = currentSongRef.current;
-    if (song?.audioSrc && audioRef.current) {
-      audioRef.current.currentTime = clamped;
-    }
+    if (audioRef.current) audioRef.current.currentTime = clamped;
   }, [playbackDuration]);
 
   const setVolume = useCallback((vol: number) => setVolumeState(vol), []);
-  const toggleShuffle = useCallback(() => setShuffle((s) => !s), []);
+
+  const toggleShuffle = useCallback(() => {
+    setShuffle((s) => {
+      const next = !s;
+      if (next && queue.length > 0) {
+        const order = buildShuffleOrder(queue.length);
+        shuffleOrderRef.current = order;
+        shufflePosRef.current = order.indexOf(currentIndex);
+      }
+      return next;
+    });
+  }, [queue.length, currentIndex]);
+
   const toggleRepeat = useCallback(() => {
-    setRepeatMode((m) => (m === "off" ? "all" : m === "all" ? "one" : "off"));
+    setRepeatMode((m) => m === "off" ? "all" : m === "all" ? "one" : "off");
   }, []);
 
   const toggleFavorite = useCallback((songId: string) => {
     const libraryService = AudioLibraryService.getInstance();
     const song = libraryService.getSongs().find((s) => s.id === songId);
     if (!song) return;
-    const newFavorite = !song.isFavorite;
 
-    // Persist via the library service — it saves to localStorage and notifies
-    // listeners, which will push the updated songs array back into this context.
-    libraryService.updateSong(songId, { isFavorite: newFavorite });
+    const newFav = !song.isFavorite;
+    libraryService.updateSong(songId, { isFavorite: newFav });
 
-    // Also keep currentSong in sync if this is the active track
-    if (currentSong?.id === songId) {
-      setCurrentSong((prev) => (prev ? { ...prev, isFavorite: newFavorite } : null));
+    if (currentSongRef.current?.id === songId) {
+      setCurrentSong((prev) => prev ? { ...prev, isFavorite: newFav } : null);
     }
-  }, [currentSong]);
+  }, []);
 
   const addToQueue = useCallback((song: Song) => {
     setQueue((prev) => [...prev, song]);
+    // Note: In a real app, you'd want to add this new song index to shuffleOrder too
   }, []);
 
   const removeFromQueue = useCallback((index: number) => {
@@ -309,28 +319,11 @@ export const AudioProvider = ({ children }: { children: ReactNode }) => {
   return (
     <AudioCtx.Provider
       value={{
-        currentSong,
-        isPlaying,
-        queue,
-        currentTime,
-        playbackDuration,
-        trackTags,
-        volume,
-        shuffle,
-        repeatMode,
-        songs,
-        playSong,
-        playQueue,
-        togglePlay,
-        nextSong,
-        prevSong,
-        seekTo,
-        setVolume,
-        toggleShuffle,
-        toggleRepeat,
-        toggleFavorite,
-        addToQueue,
-        removeFromQueue,
+        currentSong, isPlaying, queue, currentTime, playbackDuration,
+        trackTags, volume, shuffle, repeatMode, songs,
+        playSong, playQueue, togglePlay, nextSong, prevSong,
+        seekTo, setVolume, toggleShuffle, toggleRepeat,
+        toggleFavorite, addToQueue, removeFromQueue,
       }}
     >
       {children}
